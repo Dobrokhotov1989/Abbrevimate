@@ -15,6 +15,7 @@ library(xml2)
 library(dplyr)
 library(zip)
 library(shinythemes)
+library(qdapTools)
 source("helper.R")
 
 
@@ -40,7 +41,8 @@ ui <- function(request){
               #Need to enable 'disabled' function
               useShinyjs(),
               # Application title
-              titlePanel("Abbervimate"),
+              titlePanel(title=div(img(src="logo.svg", width = "70px"), "Abbervimate")),
+              #titlePanel("Abbervimate"),
               
               # Setup of the webpage layout
               fluidRow(
@@ -62,7 +64,7 @@ ui <- function(request){
                              
                              #Range of date to search
                              dateRangeInput("date_range",
-                                            "Date",
+                                            "Published date",
                                             format = "yyyy",
                                             start = "1800-01-01",
                                             end = sprintf("%s-12-31", as.numeric(format(Sys.Date(), "%Y")) + 1),
@@ -76,7 +78,7 @@ ui <- function(request){
                              
                              #Number of papers to analyze
                              numericInput("que_limit",
-                                          "Maximum number of records to analyze",
+                                          "Maximum number of records",
                                           value = 2,
                                           min = 1,
                                           max = 3000,
@@ -84,10 +86,10 @@ ui <- function(request){
                              
                              
                              #Button to start search
-                             actionButton("search", "Search"),
+                             actionButton("search", "Search", class = "btn-primary"),
                              
                              #Bookmark bottom
-                             bookmarkButton()
+                             bookmarkButton(class="btn btn-secondary")
                              
                          )
                          
@@ -129,6 +131,19 @@ ui <- function(request){
                                                                          "Which term to show:",
                                                                          choices = list())))),
                                               tabsetPanel(id = "inResults",
+                                                          tabPanel("Abbreviation suspects",
+                                                                   h4("Potential abbreviations"),
+                                                                   tags$div(align = 'left', 
+                                                                            class = 'multicol', 
+                                                                            checkboxGroupInput(inputId  = 'abbr', 
+                                                                                               label = NULL,
+                                                                                               inline   = FALSE)),
+                                                                   h4("Probably not abbreviations"),
+                                                                   tags$div(align = 'left', 
+                                                                            class = 'multicol', 
+                                                                            checkboxGroupInput(inputId  = 'non_abbr',
+                                                                                               label = NULL,
+                                                                                               inline   = FALSE))),
                                                           tabPanel("Raw results",
                                                                    br(),
                                                                    fluidRow(
@@ -147,21 +162,7 @@ ui <- function(request){
                                                                    h5(textOutput("Term_to_show")),
                                                                    p(textOutput("N_of_matches")),
                                                                    #Output table
-                                                                   tableOutput("raw_dictionary")),
-                                                          
-                                                          tabPanel("Abbreviation suspects",
-                                                                   h4("Potential abbreviations"),
-                                                                   tags$div(align = 'left', 
-                                                                            class = 'multicol', 
-                                                                            checkboxGroupInput(inputId  = 'abbr', 
-                                                                                               label = NULL,
-                                                                                               inline   = FALSE)),
-                                                                   h4("Probably not abbreviations"),
-                                                                   tags$div(align = 'left', 
-                                                                            class = 'multicol', 
-                                                                            checkboxGroupInput(inputId  = 'non_abbr',
-                                                                                               label = NULL,
-                                                                                               inline   = FALSE)))
+                                                                   tableOutput("raw_dictionary"))
                                               )
                                      )
                          )
@@ -170,14 +171,14 @@ ui <- function(request){
                          textAreaInput("dic", "Your dictionary",
                                        placeholder = "Enter you terms here",
                                        resize = "vertical",
-                                       rows = 20),
-                         disabled(actionButton("add_dic", "Add selected to dictionary", width = '100%')),
+                                       rows = 15),
+                         disabled(actionButton("add_dic", "Add selected to dictionary", width = '100%', class = "btn-primary btn-sm")),
                          br(),
                          br(),
-                         disabled(downloadButton("download_dic", "Download dictionary", style = "width:100%;")),
+                         disabled(downloadButton("download_dic", "Download dictionary", style = "width:100%;", class = "btn-primary btn-sm")),
                          br(),
                          br(),
-                         disabled(downloadButton("download_all", "Download all dictionaries", style = "width:100%;")))
+                         disabled(downloadButton("download_all", "Download all dictionaries", style = "width:100%;", class = "btn-primary btn-sm")))
                   
               )
     )
