@@ -20,6 +20,19 @@ srch_pattern = function(srch_term = input$srch_term,
   
 }
 
+#Number of records
+n_of_hits = function(srch_term = input$srch_term,
+                     dateRange = input$date_range){
+  
+  start = format(dateRange[1], "%Y")
+  end = format(dateRange[2], "%Y")
+  query = paste0("\"", tolower(srch_term), "\"",
+                 " AND (FIRST_PDATE:[", start, " TO ", end,
+                 "]) AND (OPEN_ACCESS:y)")
+  n_of_hits = europepmc::epmc_hits(query = query)
+  
+}
+
 #Download records list function
 downSingle = function (srch_term = input$srch_term,
                        que_limit = input$que_limit,
@@ -37,6 +50,10 @@ downSingle = function (srch_term = input$srch_term,
   search_results = europepmc::epmc_search(query = query,
                                           limit = que_limit,
                                           verbose = FALSE)
+  
+  #remove cases when pmcid is NA
+  search_results = search_results[complete.cases(search_results[,"pmcid"]),]
+  
   removeNotification(notif)
   
   if (!is.null(search_results)) {
@@ -49,6 +66,7 @@ downSingle = function (srch_term = input$srch_term,
       for (i in 1:nrow(search_results)){
         full_paper = europepmc::epmc_ftxt(search_results$pmcid[i])
         splitted_paper = trimws(xml_find_all(xml_children(xml_children(full_paper)), "//p"))
+        splitted_paper = cleanFun(splitted_paper)
         n_of_parag = length(splitted_paper)
         if(n_of_parag > 0){
           splitted_paper.df = data.frame(parag = 1:n_of_parag,
@@ -56,8 +74,9 @@ downSingle = function (srch_term = input$srch_term,
           token.df = (splitted_paper.df %>%
                         unnest_tokens(sentence, text, token = "sentences"))
           collected.data = c(collected.data,
-                             stringr::str_extract(string = token.df$sentence,
-                                                  pattern = search_pattern))
+                             as.vector(stringr::str_extract_all(string = token.df$sentence,
+                                                  pattern = search_pattern,
+                                                  simplify = TRUE)))
           collected.data = collected.data[!is.na(collected.data)]
           
         }
@@ -65,7 +84,7 @@ downSingle = function (srch_term = input$srch_term,
         incProgress(1/nrow(search_results))
       }
     })
-    collected.data = unique(cleanFun(collected.data))
+    collected.data = unique(collected.data)
     if (length(collected.data) == 0) {
       collected.data = "No matches"
     }
