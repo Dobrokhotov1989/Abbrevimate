@@ -86,10 +86,15 @@ ui <- function(request){
                              
                              
                              #Button to start search
-                             actionButton("search", "Search", class = "btn-primary"),
-                             
-                             #Bookmark bottom
-                             bookmarkButton(class="btn btn-secondary")
+                             actionButton("search", "Search", width = '100%', class = "btn-primary btn-sm"),
+                             br(),
+                             br(),
+                             #Save session button
+                             actionButton("save_session", "Save session", width = '100%', class = "btn-primary btn-sm"),
+                             br(),
+                             br(),
+                             #Load session button
+                             actionButton("load_session", "Load session", width = '100%', class = "btn-primary btn-sm"),
                              
                          )
                          
@@ -131,14 +136,15 @@ ui <- function(request){
                                                                          "Which term to show:",
                                                                          choices = list())))),
                                               tabsetPanel(id = "inResults",
-                                                          tabPanel("Abbreviation suspects",
-                                                                   h4("Potential abbreviations"),
+                                                          tabPanel("Abbreviations",
+                                                                   h3("Potential synonyms"),
                                                                    tags$div(align = 'left', 
                                                                             class = 'multicol', 
                                                                             checkboxGroupInput(inputId  = 'abbr', 
                                                                                                label = NULL,
                                                                                                inline   = FALSE)),
-                                                                   h4("Probably not abbreviations"),
+                                                                   br(),
+                                                                   h3("Probably not synonyms"),
                                                                    tags$div(align = 'left', 
                                                                             class = 'multicol', 
                                                                             checkboxGroupInput(inputId  = 'non_abbr',
