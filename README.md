@@ -1,4 +1,4 @@
 # Abbrevimate
 Search abbreviations in academic literature
 
-This is not completed application
+This project is under development
