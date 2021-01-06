@@ -78,7 +78,7 @@ downSingle = function (srch_term = input$srch_term,
                                                   pattern = search_pattern,
                                                   simplify = TRUE)))
           collected.data = collected.data[!is.na(collected.data)]
-          
+          collected.data = collected.data[which(collected.data != "")]
         }
         #https://shiny.rstudio.com/articles/progress.html
         incProgress(1/nrow(search_results))
@@ -114,24 +114,27 @@ extract.term = function(string){
 
 #Deeper analyze collected data to find actual abbreviations
 data.mining = function(collected.data = collected.data){
-  extended_dictionary = tibble(raw = collected.data,
-                               term = extract.term(collected.data),
-                               raw2 = collected.data)
-  
-  extended_dictionary = extended_dictionary %>%
-    unnest_tokens(word, raw2)
-  
-  extended_dictionary$abbr = is.abbr(term = extended_dictionary$term,
-                                     abbr = extended_dictionary$word)
-  
-  extended_dictionary$word.length = nchar(extended_dictionary$word)
-  
-  extended_dictionary$number = !is.na(as.numeric(extended_dictionary$word))
-  
-  extended_dictionary = extended_dictionary[which(extended_dictionary$word.length > 1 & 
-                                                    extended_dictionary$number == FALSE),
-                                            c("raw", "term", "word", "abbr")]
-    return(extended_dictionary)
+  if (!(is.null(collected.data))){
+    extended_dictionary = tibble(raw = collected.data,
+                                 term = extract.term(collected.data),
+                                 raw2 = collected.data)
+    
+    extended_dictionary = extended_dictionary %>%
+      unnest_tokens(word, raw2)
+    
+    extended_dictionary$abbr = is.abbr(term = extended_dictionary$term,
+                                       abbr = extended_dictionary$word)
+    
+    extended_dictionary$word.length = nchar(extended_dictionary$word)
+    
+    extended_dictionary$number = !is.na(as.numeric(extended_dictionary$word))
+    
+    extended_dictionary = extended_dictionary[which(extended_dictionary$word.length > 1 & 
+                                                      extended_dictionary$number == FALSE),
+                                              c("raw", "term", "word", "abbr")]
+    return(extended_dictionary)} else {
+      return(NULL)
+    }
 } 
 
 data.mining.with_spaces = function(srch_term = input$srch_term,

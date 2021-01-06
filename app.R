@@ -6,7 +6,7 @@
 #
 #    http://shiny.rstudio.com/
 #
-
+Sys.setlocale(locale = "English")
 library(shiny)
 library(shinyjs)
 library(europepmc)
@@ -140,16 +140,12 @@ ui <- function(request){
                                                                    h3("Potential synonyms"),
                                                                    tags$div(align = 'left', 
                                                                             class = 'multicol', 
-                                                                            checkboxGroupInput(inputId  = 'abbr', 
-                                                                                               label = NULL,
-                                                                                               inline   = FALSE)),
+                                                                            uiOutput("abbr")),
                                                                    br(),
                                                                    h3("Probably not synonyms"),
                                                                    tags$div(align = 'left', 
                                                                             class = 'multicol', 
-                                                                            checkboxGroupInput(inputId  = 'non_abbr',
-                                                                                               label = NULL,
-                                                                                               inline   = FALSE))),
+                                                                            uiOutput("non_abbr"))),
                                                           tabPanel("Raw results",
                                                                    br(),
                                                                    fluidRow(
@@ -181,6 +177,9 @@ ui <- function(request){
                          disabled(actionButton("add_dic", "Add selected to dictionary", width = '100%', class = "btn-primary btn-sm")),
                          br(),
                          br(),
+                         disabled(actionButton("clear_dic", "Clear dictionary", width = '100%', class = "btn-primary btn-sm")),
+                         br(),
+                         br(),
                          disabled(downloadButton("download_dic", "Download dictionary", style = "width:100%;", class = "btn-primary btn-sm")),
                          br(),
                          br(),
@@ -194,6 +193,12 @@ ui <- function(request){
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
     
+    values = reactiveValues(collected.data = NULL,
+                            list.of.terms = NULL,
+                            extended.dictionary = NULL,
+                            unique.abbr = NULL,
+                            unique.non_abbr = NULL)
+
     output$nhits = renderText({
         if (input$srch_term != ""){
             nhits = n_of_hits(srch_term = input$srch_term,
@@ -203,86 +208,10 @@ server <- function(input, output, session) {
     })
     
     observeEvent(input$search, {
+
         if (input$srch_term != "") {
             
-            collected.data = downSingle(srch_term = input$srch_term,
-                                        que_limit = input$que_limit,
-                                        dateRange = input$date_range,
-                                        derivatives = input$derivatives)
-            
-            enable("download")
-            enable("add_dic")
-            
-            updateTabsetPanel(session, "inTabset",
-                              selected = "Search results")
-            
-            n_of_data = length(collected.data)
-            
-            output$Term_to_show = renderText({paste0("Results for ", input$srch_term)})
-            
-            output$N_of_matches = renderText({if (!(collected.data[1] %in% c("No papers", "No matches"))){
-                paste0("The search resulted in ", n_of_data, " matches")
-            } else {
-                "The search resulted in 0 matches"
-            }
-                
-            })
-            
-            output$raw_dictionary = renderTable(colnames = FALSE,
-                                                striped = TRUE,
-                                                bordered = TRUE,
-                                                width = '100%',
-                                                {if (!(collected.data[1] %in% c("No papers", "No matches"))){
-                                                    if (n_of_data %% input$n_of_col == 0) {reps = 0}
-                                                    else {reps = input$n_of_col - (n_of_data %% input$n_of_col)}
-                                                    #https://www.tutorialspoint.com/how-to-split-a-vector-into-chunks-in-r
-                                                    collected.chuncks = split(c(collected.data, rep("", times = reps)),
-                                                                              ceiling(seq_along(c(collected.data, rep("", times = reps)))/ceiling(n_of_data/input$n_of_col)))
-                                                    collected.chuncks = append(list(as.character(seq(from = 1, to = ceiling(n_of_data/input$n_of_col), by = 1))), collected.chuncks)
-                                                } else if (collected.data == "No papers") {
-                                                    
-                                                    "No articles matching the request"
-                                                    
-                                                } else if (collected.data == "No matches") {
-                                                    
-                                                    "Nothing resambles abbreviation"
-                                                    
-                                                }
-                                                })
-            
-            extended.dictionary = data.mining(collected.data)
-            if (countSpaces(input$srch_term) > 0) {
-                extended.dictionary = rbind(extended.dictionary,
-                                            data.mining.with_spaces(srch_term = input$srch_term,
-                                                                    collected.data = collected.data))
-            }
-            
-            
-            unique_words = unique(extended.dictionary[,c("word", "abbr")])
-            
-            unique_abbr = unique_words[which(unique_words$abbr == TRUE), "word"]
-            
-            unique_non_abbr = unique_words[which(unique_words$abbr == FALSE), "word"]
-            
-            unique_non_abbr = unique_non_abbr[which(mapply(countSpaces, unique_non_abbr) == 0),]
-            
-            updateCheckboxGroupInput(session, "abbr",
-                                     choices = unique_abbr$word,
-                                     selected = unique_abbr$word)
-            
-            updateCheckboxGroupInput(session, "non_abbr",
-                                     choices = unique_non_abbr$word)
-            
-            enable("download_dic")
-            enable("add_dic")
-            
-            output$download <- downloadHandler(
-                filename = function() {
-                    paste0(tolower(input$srch_term), ".csv")
-                },
-                content = function(file) {
-                    write.csv(collected.data, file, row.names = FALSE)
-                })
+            list_of_terms = input$srch_term
             
         } else {
             
@@ -298,144 +227,201 @@ server <- function(input, output, session) {
             
             list_of_terms = unique(list_of_terms)
             
-            n_of_terms = length(list_of_terms)
+        }
+        
+        n_of_terms = length(list_of_terms)
+        
+        withProgress(message = 'Total progress', value = 0, {
             
-            output$N_of_unique = renderText({paste0("File with ", n_of_terms, " unique terms was uploaded.")})
+            collected.data = list()
+            extended.dictionary = list()
+            unique.words = list()
+            unique.abbr = list()
+            unique.non_abbr = list()
             
-            updateTabsetPanel(session, "inTabset",
-                              selected = "Search results")
-            
-            withProgress(message = 'Total progress', value = 0, {
-                collected.data = list()
-                extended.dictionary = list()
-                for (i in 1:n_of_terms){
-                    collected.data[[i]] = downSingle(srch_term = list_of_terms[i],
-                                                     que_limit = input$que_limit,
-                                                     dateRange = input$date_range,
-                                                     derivatives = input$derivatives)
-                    
-                    extended.dictionary[[i]] = data.mining(collected.data[[i]])
-                    
-                    if (countSpaces(list_of_terms[i]) > 0) {
-                        extended.dictionary[[i]] = rbind(extended.dictionary[[i]],
-                                                         data.mining.with_spaces(srch_term = list_of_terms[i],
-                                                                                 collected.data = collected.data[[i]]))
-                    }
-                    
-                    
-                    incProgress(1/n_of_terms)   
-                } 
+            for (i in 1:n_of_terms){
+                collected.data[[i]] = downSingle(srch_term = list_of_terms[i],
+                                                 que_limit = input$que_limit,
+                                                 dateRange = input$date_range,
+                                                 derivatives = input$derivatives)
                 
-            })
+                extended.dictionary[[i]] = data.mining(collected.data[[i]])
+                
+                if (countSpaces(list_of_terms[i]) > 0) {
+                    extended.dictionary[[i]] = rbind(extended.dictionary[[i]],
+                                                     data.mining.with_spaces(srch_term = list_of_terms[i],
+                                                                             collected.data = collected.data[[i]]))
+                }
+                
+                unique.words[[i]] = unique(extended.dictionary[[i]][,c("word", "abbr")])
+                unique.abbr[[i]] = unique.words[[i]][which(unique.words[[i]]$abbr == TRUE), "word"]
+                
+                unique.non_abbr[[i]] = unique.words[[i]][which(unique.words[[i]]$abbr == FALSE), "word"]
+                unique.non_abbr[[i]] = unique.non_abbr[[i]][which(mapply(countSpaces, unique.non_abbr[[i]]) == 0),]
+                
+                incProgress(1/n_of_terms)   
+            } 
             
-            enable("download")
-            enable("show_term")
-            updateSelectInput(session, "show_term",
-                              choices = list_of_terms, selected = list_of_terms[1])
+        })
+        
+        values$collected.data = collected.data
+        values$list.of.terms = list_of_terms
+        values$extended.dictionaty = extended.dictionary
+        values$unique.abbr = unique.abbr
+        values$unique.non_abbr = unique.non_abbr
+        
+        enable("download")
+        enable("add_dic")
+        enable("clear_dic")
+        enable("show_term")
+        enable("download_dic")
+        enable("download_all")
+        
+        updateTabsetPanel(session, "inTabset",
+                          selected = "Search results")
+        
+        updateSelectInput(session, "show_term",
+                          choices = list_of_terms, selected = list_of_terms[1])
+    })
+    
+    output$Term_to_show = renderText({paste0("Results for ", input$show_term)}) 
+    
+    output$N_of_unique = renderText({
+        n_of_terms = length(values$list.of.terms)
+        paste0(n_of_terms, " unique terms was used.")
+    })
+    
+    output$raw_dictionary = renderTable(colnames = FALSE,
+                                        striped = TRUE,
+                                        bordered = TRUE,
+                                        width = '100%',
+                                        {if (!is.null(values$collected.data) & input$show_term != ""){
+                                            collected.data = values$collected.data[[which(values$list.of.terms == input$show_term)]]
+                                            
+                                            if (!(collected.data[1] %in% c("No papers", "No matches"))){
+                                                
+                                                
+                                                n_of_data = length(collected.data)
+                                                if (n_of_data %% input$n_of_col == 0) {reps = 0}
+                                                else {reps = input$n_of_col - (n_of_data %% input$n_of_col)}
+                                                #https://www.tutorialspoint.com/how-to-split-a-vector-into-chunks-in-r
+                                                collected.chuncks = split(c(collected.data, rep("", times = reps)),
+                                                                          ceiling(seq_along(c(collected.data, rep("", times = reps)))/ceiling(n_of_data/input$n_of_col)))
+                                                collected.chuncks = append(list(as.character(seq(from = 1, to = ceiling(n_of_data/input$n_of_col), by = 1))), collected.chuncks)
+                                                
+                                                
+                                                
+                                                
+                                            } else if (collected.data == "No papers") {
+                                                
+                                                "No articles matching the request"
+                                                
+                                            } else if (collected.data == "No matches") {
+                                                
+                                                "Nothing resambles abbreviation"
+                                                
+                                            }
+                                        }
+                                        })
+    
+    output$abbr = renderUI({
+        if (!(is.null(values$unique.abbr)) & input$show_term != ""){
+            unique.abbr = values$unique.abbr[[which(values$list.of.terms == input$show_term)]]
+            checkboxGroupInput(inputId  = 'abbr', 
+                               label = NULL,
+                               inline = FALSE,
+                               choices = unique.abbr$word,
+                               selected = unique.abbr$word)
+        }
+    })
+    
+    output$non_abbr = renderUI({
+        if (!(is.null(values$unique.non_abbr)) & input$show_term != ""){
+            unique.non_abbr = values$unique.non_abbr[[which(values$list.of.terms == input$show_term)]]
+            checkboxGroupInput(inputId  = 'non_abbr',
+                               label = NULL,
+                               inline = FALSE,
+                               choices = unique.non_abbr$word,
+                               selected = values$non_abbr.selected)
+        }
+    })
+    
+    output$N_of_matches = renderText({
+        if (!is.null(values$collected.data) & input$show_term != ""){
+            collected.data = values$collected.data[[which(values$list.of.terms == input$show_term)]]
+            n_of_data = length(collected.data)
             
-            
-            output$raw_dictionary = renderTable(colnames = FALSE,
-                                                striped = TRUE,
-                                                bordered = TRUE,
-                                                width = '100%',
-                                                {if (!(collected.data[[which(list_of_terms == input$show_term)]] %in% c("No papers", "No matches"))){
-                                                    unique_words = unique(extended.dictionary[[which(list_of_terms == input$show_term)]][,c("word", "abbr")])
-                                                    
-                                                    unique_abbr = unique_words[which(unique_words$abbr == TRUE), "word"]
-                                                    
-                                                    unique_non_abbr = unique_words[which(unique_words$abbr == FALSE), "word"]
-                                                    
-                                                    unique_non_abbr = unique_non_abbr[which(mapply(countSpaces, unique_non_abbr) == 0),]
-                                                    
-                                                    updateCheckboxGroupInput(session, "abbr",
-                                                                             choices = unique_abbr$word,
-                                                                             selected = unique_abbr$word)
-                                                    
-                                                    updateCheckboxGroupInput(session, "non_abbr",
-                                                                             choices = unique_non_abbr$word)
-                                                    
-                                                    n_of_data = length(collected.data[[which(list_of_terms == input$show_term)]])
-                                                    if (n_of_data %% input$n_of_col == 0) {reps = 0}
-                                                    else {reps = input$n_of_col - (n_of_data %% input$n_of_col)}
-                                                    #https://www.tutorialspoint.com/how-to-split-a-vector-into-chunks-in-r
-                                                    collected.chuncks = split(c(collected.data[[which(list_of_terms == input$show_term)]], rep("", times = reps)),
-                                                                              ceiling(seq_along(c(collected.data[[which(list_of_terms == input$show_term)]], rep("", times = reps)))/ceiling(n_of_data/input$n_of_col)))
-                                                    collected.chuncks = append(list(as.character(seq(from = 1, to = ceiling(n_of_data/input$n_of_col), by = 1))), collected.chuncks)
-                                                    
-                                                    
-                                                    
-                                                    
-                                                } else if (collected.data[[which(list_of_terms == input$show_term)]] == "No papers") {
-                                                    
-                                                    "No articles matching the request"
-                                                    
-                                                } else if (collected.data[[which(list_of_terms == input$show_term)]] == "No matches") {
-                                                    
-                                                    "Nothing resambles abbreviation"
-                                                    
-                                                }
-                                                })
-            
-            output$N_of_matches = renderText({n_of_data = length(collected.data[[which(list_of_terms == input$show_term)]])
-            if (!(collected.data[[which(list_of_terms == input$show_term)]] %in% c("No papers", "No matches"))){
+            if (!(collected.data[1] %in% c("No papers", "No matches"))){
                 paste0("The search resulted in ", n_of_data, " matches")
             } else {
                 "The search resulted in 0 matches"
             }
-            
-            })
-            
-            enable("add_dic")
-            enable("download_dic")
-            enable("download_all")
-            
-            output$Term_to_show = renderText({paste0("Results for ", input$show_term)})
-            
-            output$download <- downloadHandler(
-                filename = function(){paste0("All_raw_tables.zip")},
-                content = function(file){
-                    files <- NULL;
-                    
-                    #loop through the sheets
-                    for (i in 1:n_of_terms){
-                        #write csv file for each search term, save the name
-                        fileName <- paste0(gsub(" ", "", tolower(list_of_terms[i])), ".csv")
-                        write.csv(collected.data[i], fileName, row.names = FALSE)
-                        files <- c(fileName,files)
-                    }
-                    
-                    #create the zip file
-                    zip::zip(file,files)
-                }
-            )
-            
-            output$download_all <- downloadHandler(
-                filename = function(){paste0("All_dictionaries.zip")},
-                content = function(file){
-                    files <- NULL;
-                    
-                    #loop through the sheets
-                    for (i in 1:n_of_terms){
-                        #write csv file for each search term, save the name
-                        fileName <- paste0(gsub(" ", "", tolower(list_of_terms[i])), ".csv")
-                        unique_words = unique(extended.dictionary[[which(list_of_terms == list_of_terms[i])]][,c("word", "abbr")])
-                        unique_abbr = unique_words[which(unique_words$abbr == TRUE), "word"]
-                        write.csv(unique_abbr, fileName, row.names = FALSE)
-                        files <- c(fileName,files)
-                    }
-                    
-                    #create the zip file
-                    zip::zip(file,files)
-                }
-            )
         }
     })
     
+    output$download <- downloadHandler(
+        filename = function(){paste0("All_raw_tables.zip")},
+        content = function(file){
+            files <- NULL;
+            
+            #loop through the sheets
+            for (i in 1:n_of_terms){
+                #write csv file for each search term, save the name
+                fileName <- paste0(gsub(" ", "", tolower(list_of_terms[i])), ".csv")
+                write.csv(collected.data[i], fileName, row.names = FALSE)
+                files <- c(fileName,files)
+            }
+            
+            #create the zip file
+            zip::zip(file,files)
+        }
+    )
+    
+    output$download_all <- downloadHandler(
+        filename = function(){paste0("All_dictionaries.zip")},
+        content = function(file){
+            files <- NULL;
+            
+            #loop through the sheets
+            for (i in 1:n_of_terms){
+                #write csv file for each search term, save the name
+                fileName <- paste0(gsub(" ", "", tolower(list_of_terms[i])), ".csv")
+                values$unique_words = unique(values$extended.dictionary[[which(list_of_terms == list_of_terms[i])]][,c("word", "abbr")])
+                values$unique_abbr = values$unique_words[which(values$unique_words$abbr == TRUE), "word"]
+                write.csv(values$unique_abbr, fileName, row.names = FALSE)
+                files <- c(fileName,files)
+            }
+            
+            #create the zip file
+            zip::zip(file,files)
+        }
+    )
+    
     observeEvent(input$add_dic, {
         updateTextAreaInput(session, "dic",
-                            value = {paste(paste(input$abbr, collapse = "\n"),
-                                           paste(input$non_abbr, collapse = "\n"),
-                                           sep = "\n")})
+                            value = {
+                                dic_text = unlist(strsplit(input$dic, "\n"))
+                                dic_text = c(dic_text, input$abbr, input$non_abbr)
+                                dic_text = unique(dic_text)
+                                paste(dic_text, collapse = "\n")})
+    })
+    
+    observeEvent(input$clear_dic, {
+        showModal(modalDialog(
+            tagList(
+                "Clear of dictionary is irreversible. Are you sure?"
+            ), 
+            title="Clear dictionary",
+            footer = tagList(actionButton("confirmClear", "Clear"),
+                             modalButton("Cancel")
+            )
+        ))
+    })
+    
+    observeEvent(input$confirmClear, {
+        updateTextAreaInput(session, "dic",
+                            value = "")
+        removeModal()
     })
     
     output$download_dic <- downloadHandler(
@@ -446,6 +432,81 @@ server <- function(input, output, session) {
             write.csv(unlist(strsplit(input$dic, "\n")), file, row.names = FALSE)   
         })
     
+    observeEvent(input$save_session, {
+        outputDir = "saved_sessions"
+        dir.create(file.path(getwd(), outputDir))
+        not_exists = function(x){if (!(exists(x))) {NULL}}
+        collected.data = not_exists(x = "collected.data")
+        session.list = list(
+            Search.term = input$srch_term,
+            CSV = values$list_of_terms,
+            Header = input$header,
+            Date.range = input$date_range,
+            Derivatives = input$derivatives,
+            Que.limit = input$que_limit,
+            Show.term = input$show_term,
+            N.col = input$n_of_col,
+            Dic = input$dic,
+            collected.data = values$collected.data,
+            list.of.terms = values$list.of.terms,
+            extended.dictionary = values$extended.dictionary,
+            unique.abbr = values$unique.abbr,
+            unique.non_abbr = values$unique.non_abbr)
+        fileName = sprintf("%s_%s.rds", as.integer(Sys.time()), digest::digest(session.list))
+        saveRDS(session.list, file = file.path(getwd(), outputDir, fileName))
+        if (file.exists(file.path(getwd(), outputDir, fileName))) {
+            showNotification("Session saved successfully",
+                             type = "message")
+        } else {showNotification("Oh snap. Failed to save", 
+                                 type = "error", 
+                                 duration = NULL,
+                                 closeButton = TRUE)}
+    })
+    
+    
+    observeEvent(input$load_session, {
+        outputDir = "saved_sessions"
+        files = list.files(file.path(getwd(), outputDir),
+                           pattern = ".+\\.rds",
+                           full.names = TRUE)
+        latest.session = files[which.max(file.info(files)$mtime)]
+        session.list = readRDS(file = latest.session)
+        
+        updateTextInput(session, "srch_term",
+                        value = session.list$Search.term)
+        updateCheckboxInput(session, "header",
+                            value = session.list$Header)
+        updateDateRangeInput(session, "date_range",
+                             start = session.list$Date.range[1],
+                             end = session.list$Date.range[2])
+        updateCheckboxInput(session, "derivatives",
+                            value = session.list$Derivatives)
+        updateNumericInput(session, "que_limit",
+                           value = session.list$Que.limit)
+        updateSelectInput(session, "show_term",
+                          choices = session.list$list.of.terms,
+                          selected = session.list$Show.term)
+        updateSliderInput(session, "n_of_col",
+                          value = session.list$N.col)
+        updateTextAreaInput(session, "dic",
+                            value = session.list$Dic)
+        updateTabsetPanel(session, "inTabset",
+                          selected = "Search results")
+        
+        enable("download")
+        enable("add_dic")
+        enable("clear_dic")
+        enable("show_term")
+        enable("download_dic")
+        enable("download_all")
+        
+        values$collected.data = session.list$collected.data
+        values$list.of.terms = session.list$list.of.terms
+        values$extended.dictionary = session.list$extended.dictionary
+        values$unique.abbr = session.list$unique.abbr
+        values$unique.non_abbr = session.list$unique.non_abbr
+        
+    })
     
 } 
 
