@@ -42,7 +42,6 @@ ui <- function(request){
               useShinyjs(),
               # Application title
               titlePanel(title=div(img(src="logo.svg", width = "70px"), "Abbervimate")),
-              #titlePanel("Abbervimate"),
               
               # Setup of the webpage layout
               fluidRow(
@@ -105,26 +104,8 @@ ui <- function(request){
                   column(width = 7,
                          tabsetPanel(id = "inTabset",
                                      tabPanel("Read me", 
-                                              p("This application is designed to be your
-                                                mate in the tedious task - creation of abbreviations dictionary."),
-                                              p("The logic behind this application is rather simple:
-                                                  in academic papers abbreviations should be indicated
-                                                  in parenthesis following the full term. Knowning that,
-                                                  we can search all occasions that looks like 'text (txt)'"),
-                                              p("This application helps you in this task. Enter the term of interest or
-                                                  upload a .csv file with multiple terms (note that search term field has priority over
-                                                  uploaded file, so make sure to leave the search term field empty). Then define number of papers to be analyzed,
-                                                  and select time range for publication date. Then application will generate requiest
-                                                  to EuropePMC database (only open access papers will be searched) and analyze all 
-                                                  the papers that match your request (and within the selected limit)."),
-                                              p("The output from this analysis is a list of unique character strings with the structure
-                                                  'Text (text)' among which you need to identify actual abbreviations."),
-                                              p("This application allows you to download the search result as .csv file and use it later, or 
-                                                  you can screen through the list in this application and copy-paste the abbreviations to the 
-                                                  text box at the right side. By clicking Download dictionaty button, you will 
-                                                  download your dictionary as .csv file. The original search term will be appended to your dictionary
-                                                  (works only for single term search, in case of multiple terms search add original term manually)")
-                                     ),
+                                              "Add instructions here"
+                                              ),
                                      
                                      
                                      tabPanel("Search results",
